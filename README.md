@@ -98,3 +98,7 @@ The app is now ready to use.
 This project is licensed under the **MIT License**.
 
 Copyright (c) 2025 **EllandeVED**
+
+---
+
+Checkout https://github.com/EllandeVED/NumworksApplication
