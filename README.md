@@ -44,6 +44,8 @@ You can configure Clip Paste to match your workflow:
 - Choose a default save location when the shortcut is triggered outside Finder
 - Choose which keyboard shortcut activates the action
 
+If a filename is already in use, Clip Paste adds a numbered suffix (for example, `Note (2).txt`) and keeps the existing file.
+
 <img width="479" height="392" alt="Image settings" src="https://github.com/user-attachments/assets/c8687ddd-7f46-4229-a64a-7436b5e08b9e" />
 <img width="480" height="390" alt="Text settings" src="https://github.com/user-attachments/assets/8e4bcb30-0adf-423e-944e-a5186c47eea3" />
 

@@ -4,32 +4,21 @@ enum ClipboardHandler {
     private static var lastAutomationNotAuthorized = false
 
     static func handleSmartPaste() {
-        print("[Clip Paste] handleSmartPaste called")
-        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
-        print("[Clip Paste] Frontmost app: \(frontmost)")
-        print("[Clip Paste] isFinderFrontmost: \(isFinderFrontmost)")
-        
         let pasteboard = NSPasteboard.general
-        print("[Clip Paste] Clipboard types: \(pasteboard.types ?? [])")
         
         if clipboardContainsFiles(pasteboard: pasteboard) {
-            print("[Clip Paste] Clipboard contains file URLs, leaving normal paste behavior to Finder / app")
             return
         }
         
         if Preferences.isImageBehaviorEnabled, let image = clipboardImage(pasteboard: pasteboard) {
-            print("[Clip Paste] Image detected on clipboard")
             createImageFile(from: image)
             return
         }
         
         if Preferences.isTextBehaviorEnabled, let text = clipboardText(pasteboard: pasteboard) {
-            print("[Clip Paste] Text detected on clipboard: \(text.prefix(80))")
             createTextFile(from: text)
             return
         }
-        
-        print("[Clip Paste] No matching clipboard content for smart paste (no image/text or behaviors disabled)")
     }
 
     private static var isFinderFrontmost: Bool {
@@ -42,12 +31,7 @@ enum ClipboardHandler {
     }
 
     private static func clipboardImage(pasteboard: NSPasteboard) -> NSImage? {
-        if let image = NSImage(pasteboard: pasteboard) {
-            print("[Clip Paste] clipboardImage extracted: <NSImage>")
-            return image
-        }
-        print("[Clip Paste] clipboardImage extracted: nil (no NSImage)")
-        return nil
+        NSImage(pasteboard: pasteboard)
     }
     
     private static func clipboardImageName(pasteboard: NSPasteboard) -> String? {
@@ -56,18 +40,15 @@ enum ClipboardHandler {
            let url = urls.first {
             let base = url.deletingPathExtension().lastPathComponent
             if !base.isEmpty {
-                print("[Clip Paste] clipboardImageName inferred from URL: \(base)")
                 return base
             }
         }
         // Detect screenshots on the pasteboard (e.g. from macOS screenshot shortcuts)
         if let types = pasteboard.types {
             if types.contains(NSPasteboard.PasteboardType("com.apple.screencapture")) {
-                print("[Clip Paste] clipboardImageName: detected screenshot via com.apple.screencapture; using 'screenshot'")
                 return "screenshot"
             }
             if types.contains(NSPasteboard.PasteboardType("com.apple.screencapture.type")) {
-                print("[Clip Paste] clipboardImageName: detected screenshot via com.apple.screencapture.type; using 'screenshot'")
                 return "screenshot'"
             }
 
@@ -83,53 +64,32 @@ enum ClipboardHandler {
                 imageUTIs.contains(type.rawValue)
             }
             if hasImageType {
-                print("[Clip Paste] clipboardImageName: no explicit name but image data present; using 'screenshot' as default name")
                 return "screenshot"
             }
         }
 
-        print("[Clip Paste] clipboardImageName: nil (no suitable source name)")
         return nil
     }
 
     private static func clipboardText(pasteboard: NSPasteboard) -> String? {
-        if let text = pasteboard.string(forType: .string) {
-            print("[Clip Paste] clipboardText extracted: \"\(text.prefix(80))\"")
-            return text
-        } else {
-            print("[Clip Paste] clipboardText extracted: nil")
-            return nil
-        }
+        pasteboard.string(forType: .string)
     }
 
     private static func saveDirectoryURL() -> URL? {
         if isFinderFrontmost {
-            print("[Clip Paste] Finder is frontmost, trying to resolve frontmost folder via AppleScript")
             if let finderURL = finderFrontmostDirectoryURL() {
-                print("[Clip Paste] saveDirectoryURL (Finder frontmost) -> \(finderURL.path)")
                 return finderURL
-            } else {
-                if lastAutomationNotAuthorized {
-                    print("[Clip Paste] Not authorized to control Finder; will NOT fall back to default save location")
-                    return nil
-                } else {
-                    print("[Clip Paste] Could not resolve Finder frontmost folder (not an authorization issue), falling back to default save location (if enabled)")
-                }
+            }
+            if lastAutomationNotAuthorized {
+                return nil
             }
         }
 
         if !Preferences.isDefaultSaveEnabled {
-            print("[Clip Paste] Default save location is disabled and Finder folder could not be resolved; aborting smart paste.")
             return nil
         }
         
-        guard let defaultURL = defaultSaveDirectoryURL() else {
-            print("[Clip Paste] defaultSaveDirectoryURL returned nil")
-            return nil
-        }
-        print("[Clip Paste] saveDirectoryURL (default) -> \(defaultURL.path) for location \(Preferences.saveLocation)")
-        print("[Clip Paste] This folder is used when Finder is not frontmost or when the Finder folder cannot be resolved (and default save is enabled).")
-        return defaultURL
+        return defaultSaveDirectoryURL()
     }
     
     private static func defaultSaveDirectoryURL() -> URL? {
@@ -163,7 +123,6 @@ enum ClipboardHandler {
         """
         
         guard let script = NSAppleScript(source: scriptSource) else {
-            print("[Clip Paste] Failed to create NSAppleScript for Finder frontmost directory")
             return nil
         }
         
@@ -171,9 +130,7 @@ enum ClipboardHandler {
         let output = script.executeAndReturnError(&errorDict)
         
         if let errorDict = errorDict {
-            print("[Clip Paste] NSAppleScript error while resolving Finder frontmost directory: \(errorDict)")
             if let errorNumber = errorDict[NSAppleScript.errorNumber] as? Int, errorNumber == -1743 {
-                print("[Clip Paste] Not authorized to send Apple events to Finder (error -1743)")
                 lastAutomationNotAuthorized = true
                 showAutomationPermissionAlertIfNeeded()
                 return nil
@@ -185,13 +142,10 @@ enum ClipboardHandler {
         }
         
         guard let path = output.stringValue else {
-            print("[Clip Paste] NSAppleScript returned no string for Finder frontmost directory")
             return nil
         }
         
         let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("[Clip Paste] NSAppleScript raw path: '\(path)'")
-        print("[Clip Paste] NSAppleScript trimmed path: '\(trimmedPath)'")
         
         let url = URL(fileURLWithPath: trimmedPath)
         return url
@@ -217,25 +171,16 @@ enum ClipboardHandler {
             context: context
         )
 
-        let fileURL = folderURL.appendingPathComponent(baseName).appendingPathExtension("png")
-
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
             return
         }
 
-        print("[Clip Paste] Image file will be written to: \(fileURL.path)")
         do {
-            try pngData.write(to: fileURL, options: .atomic)
-            print("[Clip Paste] Image file successfully written to: \(fileURL.path)")
+            try ClipboardFileWriter.write(pngData, to: folderURL, baseName: baseName, pathExtension: "png")
         } catch {
-            let nsError = error as NSError
-            print("[Clip Paste] Error writing image file: \(nsError) (code: \(nsError.code))")
-            if nsError.code == 513 {
-                print("[Clip Paste] Hint: error 513 usually means macOS is blocking access to this folder (Files & Folders, sandbox, or iCloud permissions).")
-                showFileWritePermissionAlert(for: fileURL, error: nsError)
-            }
+            showFileWriteError(in: folderURL, error: error)
         }
     }
 
@@ -258,19 +203,10 @@ enum ClipboardHandler {
             context: context
         )
 
-        let fileURL = folderURL.appendingPathComponent(baseName).appendingPathExtension("txt")
-
-        print("[Clip Paste] Text file will be written to: \(fileURL.path)")
         do {
-            try text.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("[Clip Paste] Text file successfully written to: \(fileURL.path)")
+            try ClipboardFileWriter.write(Data(text.utf8), to: folderURL, baseName: baseName, pathExtension: "txt")
         } catch {
-            let nsError = error as NSError
-            print("[Clip Paste] Error writing text file: \(nsError) (code: \(nsError.code))")
-            if nsError.code == 513 {
-                print("[Clip Paste] Hint: error 513 usually means macOS is blocking access to this folder (Files & Folders, sandbox, or iCloud permissions).")
-                showFileWritePermissionAlert(for: fileURL, error: nsError)
-            }
+            showFileWriteError(in: folderURL, error: error)
         }
     }
 
@@ -297,19 +233,19 @@ enum ClipboardHandler {
         }
     }
 
-    private static func showFileWritePermissionAlert(for fileURL: URL, error: NSError) {
+    private static func showFileWriteError(in folderURL: URL, error: Error) {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Cannot write file"
+            alert.alertStyle = .warning
+            alert.messageText = "Cannot save file"
             alert.informativeText = """
-            Clip Paste tried to save a file here:
+            Clip Paste couldn’t save a file in:
 
-            \(fileURL.path)
+            \(folderURL.path)
 
-            but macOS reported a permissions error (code \(error.code)).
+            \(error.localizedDescription)
 
-            This usually means the folder is protected by Files & Folders, Full Disk Access, sandboxing, or iCloud Drive settings.
-            You can try a different save location in Clip Paste's settings or adjust your macOS privacy settings.
+            Try another save location or check this folder’s permissions.
             """
             alert.addButton(withTitle: "OK")
             alert.runModal()

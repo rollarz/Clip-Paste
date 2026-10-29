@@ -150,15 +150,6 @@ struct ImageSettingsTab: View {
     @Binding var imageTemplate: String
     @Binding var imageCounter: Int
 
-    private var imageTemplateContainsVariable: Bool {
-        imageTemplate.contains("{date}") ||
-        imageTemplate.contains("{time}") ||
-        imageTemplate.contains("{datetime}") ||
-        imageTemplate.contains("{weekday}") ||
-        imageTemplate.contains("{counter}") ||
-        imageTemplate.contains("{name}")
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -197,14 +188,9 @@ The .png extension is added automatically.
                                     .font(.caption)
                             }
 
-                            if !imageTemplateContainsVariable {
-                                HStack(spacing: 4) {
-                                    Text("⚠️")
-                                    Text("No variables used: this may overwrite files with the same name.")
-                                }
+                            Text("If a filename is already in use, a numbered suffix is added.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,15 +225,6 @@ struct TextSettingsTab: View {
     @Binding var isTextEnabled: Bool
     @Binding var textTemplate: String
     @Binding var textCounter: Int
-
-    private var textTemplateContainsVariable: Bool {
-        textTemplate.contains("{date}") ||
-        textTemplate.contains("{time}") ||
-        textTemplate.contains("{datetime}") ||
-        textTemplate.contains("{weekday}") ||
-        textTemplate.contains("{counter}") ||
-        textTemplate.contains("{firstWords}")
-    }
 
     var body: some View {
         ScrollView {
@@ -287,14 +264,9 @@ The .txt extension is added automatically.
                                     .font(.caption)
                             }
 
-                            if !textTemplateContainsVariable {
-                                HStack(spacing: 4) {
-                                    Text("⚠️")
-                                    Text("No variables used: this may overwrite files with the same name.")
-                                }
+                            Text("If a filename is already in use, a numbered suffix is added.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
