@@ -2,11 +2,13 @@ import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsWindowController: SettingsWindowController?
     private var onboardingWindowController: NSWindowController?
-    // Tracks whether the initial launch flow has created a settings window at least once.
-    private var hasCreatedSettingsWindow = false
+    private var statusItem: NSStatusItem?
+    private var preferencesObserver: NSObjectProtocol?
+    private var hasFinishedLaunchSetup = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If a move+relaunch is in progress, stop here.
@@ -14,8 +16,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Start hidden in Dock
-        NSApp.setActivationPolicy(.accessory)
+        hasFinishedLaunchSetup = true
+        applyAppearancePreferences()
+        preferencesObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.applyAppearancePreferences()
+            }
+        }
 
         registerShortcutHandler()
         CPUpdateChecker.shared.checkOnLaunch()
@@ -43,37 +52,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // Only reopen the settings window if one has already been created by the initial flow.
-        // This avoids creating a settings window before the move popup or onboarding.
-        guard hasCreatedSettingsWindow, let window = settingsWindowController?.window else {
-            return false
-        }
-
-        if !window.isVisible {
-            showSettings()
-        } else {
+        guard hasFinishedLaunchSetup else { return false }
+        if let window = onboardingWindowController?.window {
             window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            showSettings()
         }
         return false
     }
 
-    private func showSettings() {
+    @objc private func showSettings() {
+        if let onboarding = onboardingWindowController?.window {
+            onboarding.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(rootView: SettingsView())
-            hasCreatedSettingsWindow = true
         }
 
         guard let window = settingsWindowController?.window else { return }
 
-        NSApp.setActivationPolicy(.regular)
+        applyAppearancePreferences()
         NSApp.activate(ignoringOtherApps: true)
 
         window.makeKeyAndOrderFront(nil)
     }
 
     func hideSettings() {
-        // Called when the settings window closes
-        NSApp.setActivationPolicy(.accessory)
+        applyAppearancePreferences()
+    }
+
+    private func applyAppearancePreferences() {
+        let policy: NSApplication.ActivationPolicy = Preferences.hideDockIcon ? .accessory : .regular
+        if NSApp.activationPolicy() != policy {
+            NSApp.setActivationPolicy(policy)
+        }
+        if Preferences.showMenuBarIcon, statusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item.button?.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "Clip Paste")
+            item.button?.image?.isTemplate = true
+            item.button?.toolTip = "Clip Paste"
+            let menu = NSMenu()
+            let settings = menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+            settings.target = self
+            let updates = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            updates.target = self
+            menu.addItem(.separator())
+            let quit = menu.addItem(withTitle: "Quit Clip Paste", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            quit.target = NSApp
+            item.menu = menu
+            statusItem = item
+        } else if !Preferences.showMenuBarIcon, let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        CPUpdateChecker.shared.checkNow()
+    }
+
+    private var onboardingKey: String {
+        #if DEBUG
+        return "hasSeenOnboardingDebug"
+        #else
+        return "hasSeenOnboarding::" + Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        #endif
+    }
+
+    private func finishOnboarding() {
+        guard let controller = onboardingWindowController else { return }
+        UserDefaults.standard.set(true, forKey: onboardingKey)
+        onboardingWindowController = nil
+        controller.close()
+        showSettings()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window === onboardingWindowController?.window {
+            finishOnboarding()
+        }
     }
 
     private func registerShortcutHandler() {
@@ -83,27 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func showOnboarding() {
         if onboardingWindowController == nil {
-            let onboardingKey: String = {
-                #if DEBUG
-                return "hasSeenOnboardingDebug"
-                #else
-                let installID = Bundle.main.bundleURL.resolvingSymlinksInPath().path
-                return "hasSeenOnboarding::" + installID
-                #endif
-            }()
-
             let contentView = ClipPasteOnboardingView(isPresented: .init(
                 get: { self.onboardingWindowController != nil },
                 set: { newValue in
                     if !newValue {
-                        // Treat any dismissal (Continue button or red close button)
-                        // as “onboarding has been shown once”.
-                        UserDefaults.standard.set(true, forKey: onboardingKey)
-
-                        // Onboarding finished: close and show settings
-                        self.onboardingWindowController?.close()
-                        self.onboardingWindowController = nil
-                        self.showSettings()
+                        self.finishOnboarding()
                     }
                 }
             ))
@@ -118,11 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             window.title = "Welcome to Clip Paste"
             window.contentViewController = hosting
+            window.delegate = self
 
             onboardingWindowController = NSWindowController(window: window)
         }
 
-        NSApp.setActivationPolicy(.regular)
+        applyAppearancePreferences()
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindowController?.showWindow(nil)
     }

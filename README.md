@@ -16,7 +16,7 @@ Clip Paste is a small utility app for Finder on macOS. It allows to paste images
 
 <img width="484" height="395" alt="Clip Paste settings panel" src="https://github.com/user-attachments/assets/46e9f36c-45e4-43de-a048-be2eb6913ad4" />
 
-The app’s only user interface is the settings panel shown above.
+Configure the app in Settings, or enable the optional menu bar icon for quick access.
 
 ---
 
@@ -41,7 +41,11 @@ You can configure Clip Paste to match your workflow:
 
 - Enable or disable image and text file creation
 - Customize filename templates
-- Choose a default save location when the shortcut is triggered outside Finder
+- Choose Desktop, Downloads, Pictures, or a custom default folder when the shortcut is triggered outside Finder
+- Save images as PNG, JPEG, TIFF, or HEIC; adjust compression quality for JPEG and HEIC
+- Save text as UTF-8 plain text, RTF, or HTML
+- Hide the Dock icon and optionally show a menu bar icon
+- Enable or disable automatic update checks at launch
 - Choose which keyboard shortcut activates the action
 
 If a filename is already in use, Clip Paste adds a numbered suffix (for example, `Note (2).txt`) and keeps the existing file.
@@ -79,19 +83,28 @@ The app is now ready to use.
 
 ## Updates
 
-- Updates are handled inside the app
-- For automatic updates to work reliably, the app must be located in the **Applications** folder
+- Enable or disable **Check for updates at launch** in General settings.
+- **Check for Updates…** remains available for manual checks even when automatic checks are disabled.
+- Downloads require your approval; the app shows instructions for opening the downloaded update.
 
 ---
 
-## Currently Working On
+## Export and visibility options
 
-- [ ] Custom locations for the default save folder
-- [ ] Support for more image formats
-- [ ] Support for more text formats (including formatting)
+- [x] Custom locations for the default save folder
+- [x] PNG, JPEG, TIFF, and HEIC image export
+- [x] Plain text, RTF, and HTML text export
 - [x] A hide Dock icon option
-- [ ] A check-for-updates enable/disable option
-- [ ] An optional menu bar icon
+- [x] A check-for-updates enable/disable option
+- [x] An optional menu bar icon
+
+Choose **Custom folder** in the save-location picker, then **Choose Folder…**. The app remembers the selected folder using a bookmark. If that folder becomes unavailable, saving reports an error so you can choose it again. Finder's current folder continues to take priority when Finder is frontmost.
+
+PNG and TIFF are lossless exports. JPEG and HEIC have an adjustable quality setting. JPEG composites transparency onto a white background. HEIC encoding depends on the Mac's image-encoding support; choose another format if encoding fails.
+
+RTF preserves fonts, emphasis, colors, and links when the source application supplies RTF/RTFD. HTML preserves supplied HTML, or exports available rich text. Plain text is used when richer content is unavailable. HTML-only content is not rendered to convert it to RTF, so the app does not load remote images or styles during conversion. Text export does not package embedded attachments into companion files.
+
+Dock and menu bar preferences apply immediately. The menu bar icon offers Settings, manual update checks, and Quit. If both icons are hidden, reopen Clip Paste from Applications to reach Settings.
 
 ---
 

@@ -82,6 +82,9 @@ struct SettingsView: View {
 struct GeneralSettingsTab: View {
     @Binding var selectedSaveLocation: SaveLocation
     @Binding var isDefaultSaveEnabled: Bool
+    @AppStorage(BehaviorKey.hideDockIcon.rawValue) private var hideDockIcon = false
+    @AppStorage(BehaviorKey.showMenuBarIcon.rawValue) private var showMenuBarIcon = false
+    @AppStorage(BehaviorKey.automaticUpdateChecksEnabled.rawValue) private var automaticUpdateChecksEnabled = true
 
     var body: some View {
         ScrollView {
@@ -102,14 +105,9 @@ struct GeneralSettingsTab: View {
                         Toggle("Use a default save folder when Finder is not frontmost", isOn: $isDefaultSaveEnabled)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Picker("Save files to:", selection: $selectedSaveLocation) {
-                                ForEach(SaveLocation.allCases) { location in
-                                    Text(location.displayName).tag(location)
-                                }
-                            }
-                            .pickerStyle(.segmented)
+                            SaveLocationPicker(selection: $selectedSaveLocation)
 
-                            Text("This were the file will be saved when executing the app outside Finder.")
+                            Text("Files are saved here when Finder is not frontmost.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -119,20 +117,32 @@ struct GeneralSettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 GroupBox(label: Text("General").font(.headline)) {
-                    LaunchAtLogin.Toggle("Open at login")
+                    VStack(alignment: .leading, spacing: 8) {
+                        LaunchAtLogin.Toggle("Open at login")
+                        Toggle("Hide Dock icon", isOn: $hideDockIcon)
+                        Toggle("Show menu bar icon", isOn: $showMenuBarIcon)
+                        if hideDockIcon && !showMenuBarIcon {
+                            Text("Open Clip Paste from Applications to return to Settings.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 GroupBox(label: Text("Updates").font(.headline)) {
-                    HStack {
-                        Text("Check for a new version of Clip Paste on GitHub.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Button("Check for Updates…") {
-                            CPUpdateChecker.shared.checkNow()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Check for updates at launch", isOn: $automaticUpdateChecksEnabled)
+                        HStack {
+                            Text("Check for a new version of Clip Paste on GitHub.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Check for Updates…") {
+                                CPUpdateChecker.shared.checkNow()
+                            }
+                            .controlSize(.small)
                         }
-                        .controlSize(.small)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,6 +159,8 @@ struct ImageSettingsTab: View {
     @Binding var isImageEnabled: Bool
     @Binding var imageTemplate: String
     @Binding var imageCounter: Int
+    @AppStorage(BehaviorKey.imageFileFormat.rawValue) private var imageFormat = ImageFileFormat.png
+    @AppStorage(BehaviorKey.imageCompressionQuality.rawValue) private var imageQuality = 0.9
 
     var body: some View {
         ScrollView {
@@ -159,6 +171,28 @@ struct ImageSettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 20) {
+                    GroupBox(label: Text("Image Format").font(.headline)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("Save images as:", selection: $imageFormat) {
+                                ForEach(ImageFileFormat.allCases) { format in
+                                    Text(format.displayName).tag(format)
+                                }
+                            }
+                            if imageFormat.isLossy {
+                                HStack {
+                                    Text("Quality")
+                                    Slider(value: $imageQuality, in: 0.1...1)
+                                    Text(imageQuality, format: .percent.precision(.fractionLength(0)))
+                                        .monospacedDigit()
+                                }
+                            }
+                            if imageFormat == .jpeg {
+                                Text("Transparent areas are saved with a white background.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     GroupBox(label: Text("Image Filename Template").font(.headline)) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("""
@@ -170,7 +204,7 @@ You can use these variables in the image filename:
 - {counter}   → 1, 2, 3...
 - {name}      → image name from the clipboard (if available)
 
-The .png extension is added automatically.
+The selected format’s extension is added automatically.
 """)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -183,7 +217,7 @@ The .png extension is added automatically.
                                 TextField("Image filename template", text: $imageTemplate)
                                     .frame(maxWidth: .infinity)
                                     .textFieldStyle(.roundedBorder)
-                                Text(".png")
+                                Text(".\(imageFormat.pathExtension)")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
                             }
@@ -225,6 +259,7 @@ struct TextSettingsTab: View {
     @Binding var isTextEnabled: Bool
     @Binding var textTemplate: String
     @Binding var textCounter: Int
+    @AppStorage(BehaviorKey.textFileFormat.rawValue) private var textFormat = TextFileFormat.plainText
 
     var body: some View {
         ScrollView {
@@ -235,6 +270,18 @@ struct TextSettingsTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 20) {
+                    GroupBox(label: Text("Text Format").font(.headline)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("Save text as:", selection: $textFormat) {
+                                ForEach(TextFileFormat.allCases) { format in
+                                    Text(format.displayName).tag(format)
+                                }
+                            }
+                            Text("RTF preserves rich text supplied by the source app. HTML preserves clipboard HTML or available rich text. Otherwise, plain text is used.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     GroupBox(label: Text("Text Filename Template").font(.headline)) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("""
@@ -246,7 +293,7 @@ You can use these variables in the text filename:
 - {counter}   → 1, 2, 3...
 - {firstWords} → first words of the clipboard text
 
-The .txt extension is added automatically.
+The selected format’s extension is added automatically.
 """)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -259,7 +306,7 @@ The .txt extension is added automatically.
                                 TextField("Text filename template", text: $textTemplate)
                                     .frame(maxWidth: .infinity)
                                     .textFieldStyle(.roundedBorder)
-                                Text(".txt")
+                                Text(".\(textFormat.pathExtension)")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
                             }

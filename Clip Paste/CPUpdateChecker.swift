@@ -34,10 +34,12 @@ final class CPUpdateChecker {
 
     /// Call at launch. Silent on errors / up-to-date.
     func checkOnLaunch() {
+        guard Preferences.automaticUpdateChecksEnabled else { return }
         Task { [weak self] in
             guard let self else { return }
             do {
                 let remote = try await fetchLatest()
+                guard Preferences.automaticUpdateChecksEnabled else { return }
                 try handle(remote: remote, userInitiated: false)
             } catch {
                 // Quiet on launch; no-op

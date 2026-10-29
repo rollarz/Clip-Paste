@@ -4,6 +4,7 @@ enum SaveLocation: String, CaseIterable, Identifiable {
     case desktop
     case downloads
     case pictures
+    case custom
 
     var id: String { rawValue }
 
@@ -15,6 +16,8 @@ enum SaveLocation: String, CaseIterable, Identifiable {
             return "Downloads"
         case .pictures:
             return "Pictures"
+        case .custom:
+            return "Custom folder"
         }
     }
 }
@@ -28,10 +31,40 @@ enum BehaviorKey: String {
     case imageCounter
     case textCounter
     case isDefaultSaveEnabled
+    case customSaveFolderBookmark
+    case imageFileFormat
+    case textFileFormat
+    case imageCompressionQuality
+    case hideDockIcon
+    case showMenuBarIcon
+    case automaticUpdateChecksEnabled
 }
 
 struct Preferences {
     private static let defaults = UserDefaults.standard
+
+    static var customSaveFolderBookmark: Data? {
+        get { defaults.data(forKey: BehaviorKey.customSaveFolderBookmark.rawValue) }
+        set { defaults.set(newValue, forKey: BehaviorKey.customSaveFolderBookmark.rawValue) }
+    }
+
+    static var imageFileFormat: ImageFileFormat {
+        ImageFileFormat(rawValue: defaults.string(forKey: BehaviorKey.imageFileFormat.rawValue) ?? "") ?? .png
+    }
+
+    static var textFileFormat: TextFileFormat {
+        TextFileFormat(rawValue: defaults.string(forKey: BehaviorKey.textFileFormat.rawValue) ?? "") ?? .plainText
+    }
+
+    static var imageCompressionQuality: Double {
+        defaults.object(forKey: BehaviorKey.imageCompressionQuality.rawValue) as? Double ?? 0.9
+    }
+
+    static var hideDockIcon: Bool { defaults.bool(forKey: BehaviorKey.hideDockIcon.rawValue) }
+    static var showMenuBarIcon: Bool { defaults.bool(forKey: BehaviorKey.showMenuBarIcon.rawValue) }
+    static var automaticUpdateChecksEnabled: Bool {
+        defaults.object(forKey: BehaviorKey.automaticUpdateChecksEnabled.rawValue) as? Bool ?? true
+    }
 
     static var isImageBehaviorEnabled: Bool {
         get { defaults.bool(forKey: BehaviorKey.imageEnabled.rawValue) }

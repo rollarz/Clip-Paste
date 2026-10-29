@@ -1,5 +1,6 @@
 import AppKit
 
+@MainActor
 enum ClipboardHandler {
     private static var lastAutomationNotAuthorized = false
 
@@ -15,9 +16,15 @@ enum ClipboardHandler {
             return
         }
         
-        if Preferences.isTextBehaviorEnabled, let text = clipboardText(pasteboard: pasteboard) {
-            createTextFile(from: text)
-            return
+        if Preferences.isTextBehaviorEnabled {
+            let format = Preferences.textFileFormat
+            do {
+                if let text = try ClipboardExporter.text(from: pasteboard, format: format) {
+                    createTextFile(from: text, format: format)
+                }
+            } catch {
+                showSaveError(error)
+            }
         }
     }
 
@@ -71,10 +78,6 @@ enum ClipboardHandler {
         return nil
     }
 
-    private static func clipboardText(pasteboard: NSPasteboard) -> String? {
-        pasteboard.string(forType: .string)
-    }
-
     private static func saveDirectoryURL() -> URL? {
         if isFinderFrontmost {
             if let finderURL = finderFrontmostDirectoryURL() {
@@ -89,10 +92,15 @@ enum ClipboardHandler {
             return nil
         }
         
-        return defaultSaveDirectoryURL()
+        do {
+            return try defaultSaveDirectoryURL()
+        } catch {
+            showSaveError(error)
+            return nil
+        }
     }
     
-    private static func defaultSaveDirectoryURL() -> URL? {
+    private static func defaultSaveDirectoryURL() throws -> URL? {
         let fileManager = FileManager.default
         let domain: FileManager.SearchPathDomainMask = .userDomainMask
         
@@ -104,6 +112,8 @@ enum ClipboardHandler {
             directory = .downloadsDirectory
         case .pictures:
             directory = .picturesDirectory
+        case .custom:
+            return try CustomSaveFolder.selectedURL()
         }
         
         let url = fileManager.urls(for: directory, in: domain).first
@@ -155,6 +165,8 @@ enum ClipboardHandler {
         guard let folderURL = saveDirectoryURL() else {
             return
         }
+        let accessed = folderURL.startAccessingSecurityScopedResource()
+        defer { if accessed { folderURL.stopAccessingSecurityScopedResource() } }
 
         let date = Date()
         let counter = Preferences.nextImageCounter()
@@ -171,29 +183,29 @@ enum ClipboardHandler {
             context: context
         )
 
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return
-        }
-
         do {
-            try ClipboardFileWriter.write(pngData, to: folderURL, baseName: baseName, pathExtension: "png")
+            let format = Preferences.imageFileFormat
+            let data = try ClipboardExporter.imageData(
+                from: image, format: format, quality: Preferences.imageCompressionQuality
+            )
+            try ClipboardFileWriter.write(data, to: folderURL, baseName: baseName, pathExtension: format.pathExtension)
         } catch {
-            showFileWriteError(in: folderURL, error: error)
+            showSaveError(error, folderURL: folderURL)
         }
     }
 
-    private static func createTextFile(from text: String) {
+    private static func createTextFile(from text: TextExport, format: TextFileFormat) {
         guard let folderURL = saveDirectoryURL() else {
             return
         }
+        let accessed = folderURL.startAccessingSecurityScopedResource()
+        defer { if accessed { folderURL.stopAccessingSecurityScopedResource() } }
 
         let date = Date()
         let counter = Preferences.nextTextCounter()
         let context = FilenameTemplateContext(
             date: date,
-            clipboardText: text,
+            clipboardText: text.plainText,
             clipboardName: nil,
             counter: counter
         )
@@ -204,9 +216,9 @@ enum ClipboardHandler {
         )
 
         do {
-            try ClipboardFileWriter.write(Data(text.utf8), to: folderURL, baseName: baseName, pathExtension: "txt")
+            try ClipboardFileWriter.write(text.data, to: folderURL, baseName: baseName, pathExtension: format.pathExtension)
         } catch {
-            showFileWriteError(in: folderURL, error: error)
+            showSaveError(error, folderURL: folderURL)
         }
     }
 
@@ -233,20 +245,13 @@ enum ClipboardHandler {
         }
     }
 
-    private static func showFileWriteError(in folderURL: URL, error: Error) {
+    private static func showSaveError(_ error: Error, folderURL: URL? = nil) {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = "Cannot save file"
-            alert.informativeText = """
-            Clip Paste couldn’t save a file in:
-
-            \(folderURL.path)
-
-            \(error.localizedDescription)
-
-            Try another save location or check this folder’s permissions.
-            """
+            let location = folderURL.map { "Clip Paste couldn’t save a file in:\n\n\($0.path)\n\n" } ?? ""
+            alert.informativeText = location + error.localizedDescription
             alert.addButton(withTitle: "OK")
             alert.runModal()
         }

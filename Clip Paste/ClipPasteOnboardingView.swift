@@ -40,12 +40,7 @@ struct ClipPasteOnboardingView: View {
                 Section("Default Save (when not in Finder)") {
                     Toggle("Use a default save folder", isOn: $isDefaultSaveEnabled)
 
-                    Picker("Save files to:", selection: $selectedSaveLocation) {
-                        ForEach(SaveLocation.allCases) { location in
-                            Text(location.displayName).tag(location)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    SaveLocationPicker(selection: $selectedSaveLocation)
                     .disabled(!isDefaultSaveEnabled)
 
                     Text("When Finder is not frontmost, files will be created here.")

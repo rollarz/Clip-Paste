@@ -11,7 +11,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             defer: false
         )
         window.contentView = hostingView
-        window.title = "Paste Helper Settings"
+        window.title = "Clip Paste Settings"
         super.init(window: window)
         window.delegate = self
         window.center()
